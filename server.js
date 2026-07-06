@@ -56,42 +56,48 @@ app.get('/api/files', requireAuth, async (req, res) => {
   }
 });
 
-// 获取上传 URL（浏览器直传 Google Drive）
-app.post('/api/files/upload-url', requireAuth, async (req, res) => {
+// 上传文件（服务器中转到 Google Drive，避免 CORS）
+app.post('/api/files/upload', requireAuth, async (req, res) => {
   try {
-    const { fileName, folderId, contentType } = req.body;
+    const fileName = req.query.fileName;
+    const folderId = req.query.folderId || '';
+    const contentType = req.query.contentType || 'application/octet-stream';
 
     if (!fileName) {
       return res.status(400).json({ error: '缺少文件名' });
     }
 
-    const uploadUrl = await gdrive.getUploadUrl(
-      fileName,
-      folderId || '',
-      contentType || 'application/octet-stream'
+    // 将请求流直接 pipe 到 Google Drive
+    const result = await gdrive.uploadFile(
+      req,
+      decodeURIComponent(fileName),
+      folderId,
+      decodeURIComponent(contentType)
     );
 
-    res.json({ uploadUrl });
+    res.json({ message: '上传成功', id: result.id, name: result.name });
   } catch (err) {
-    console.error('获取上传URL失败:', err);
-    res.status(500).json({ error: '获取上传URL失败: ' + err.message });
+    console.error('上传失败:', err);
+    res.status(500).json({ error: '上传失败: ' + err.message });
   }
 });
 
-// 获取下载 URL
-app.get('/api/files/download-url', requireAuth, async (req, res) => {
+// 下载文件（服务器中转流式下载，避免 CORS）
+app.get('/api/files/download', requireAuth, async (req, res) => {
   try {
     const fileId = req.query.fileId;
+    const fileName = req.query.fileName || '';
 
     if (!fileId) {
       return res.status(400).json({ error: '缺少文件ID' });
     }
 
-    const downloadUrl = await gdrive.getDownloadUrl(fileId);
-    res.json({ downloadUrl });
+    await gdrive.downloadFile(fileId, res, fileName ? decodeURIComponent(fileName) : '');
   } catch (err) {
-    console.error('获取下载URL失败:', err);
-    res.status(500).json({ error: '获取下载URL失败: ' + err.message });
+    console.error('下载失败:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: '下载失败: ' + err.message });
+    }
   }
 });
 

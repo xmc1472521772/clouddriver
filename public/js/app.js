@@ -331,7 +331,7 @@ function renderBreadcrumb() {
 }
 
 // ===========================================
-// 文件上传（浏览器直传 Google Drive）
+// 文件上传（通过服务器中转到 Google Drive）
 // ===========================================
 
 async function uploadFile(file) {
@@ -355,23 +355,13 @@ async function uploadFile(file) {
   const fillEl = progressEl.querySelector('.upload-progress-fill');
 
   try {
-    // 1. 从服务器获取上传 URL（创建可恢复上传会话）
-    statusEl.textContent = '获取上传地址...';
-    const { uploadUrl } = await api('/api/files/upload-url', {
-      method: 'POST',
-      body: JSON.stringify({
-        fileName: file.name,
-        folderId: state.currentFolderId,
-        contentType: file.type,
-      }),
-    });
-
-    // 2. 直接上传到 Google Drive（不经服务器中转）
+    // 直接 POST 文件到服务器，服务器中转到 Google Drive
     statusEl.textContent = '上传中...';
     await new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open('PUT', uploadUrl);
-      xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+      const url = `/api/files/upload?fileName=${encodeURIComponent(file.name)}&contentType=${encodeURIComponent(file.type || 'application/octet-stream')}&folderId=${encodeURIComponent(state.currentFolderId)}`;
+      xhr.open('POST', url);
+      xhr.setRequestHeader('Authorization', `Bearer ${state.token}`);
 
       xhr.upload.addEventListener('progress', (e) => {
         if (e.lengthComputable) {
@@ -385,7 +375,9 @@ async function uploadFile(file) {
         if (xhr.status >= 200 && xhr.status < 300) {
           resolve();
         } else {
-          reject(new Error(`上传失败 (${xhr.status})`));
+          let msg = `上传失败 (${xhr.status})`;
+          try { msg = JSON.parse(xhr.responseText).error || msg; } catch {}
+          reject(new Error(msg));
         }
       });
 
@@ -393,7 +385,7 @@ async function uploadFile(file) {
       xhr.send(file);
     });
 
-    // 3. 上传成功
+    // 上传成功
     statusEl.textContent = '✓ 完成';
     statusEl.classList.add('success');
     fillEl.classList.add('success');
@@ -467,13 +459,12 @@ dropZone.addEventListener('drop', (e) => {
 
 async function downloadFile(fileId, fileName) {
   try {
-    showToast('正在生成下载链接...', 'info');
-    const { downloadUrl } = await api(`/api/files/download-url?fileId=${encodeURIComponent(fileId)}`);
-
+    showToast('正在下载...', 'info');
+    // 通过服务器中转下载，避免 CORS 问题
+    const url = `/api/files/download?fileId=${encodeURIComponent(fileId)}&fileName=${encodeURIComponent(fileName || '')}`;
     const a = document.createElement('a');
-    a.href = downloadUrl;
+    a.href = url + '&token=' + encodeURIComponent(state.token);
     a.download = fileName || '';
-    a.target = '_blank';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
