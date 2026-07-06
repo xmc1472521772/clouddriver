@@ -164,12 +164,13 @@ app.get('/api/storage/usage', requireAuth, async (req, res) => {
 });
 
 // 调试端点 — 检查 Google 凭据配置是否正确（不暴露敏感信息）
-app.get('/api/debug/credentials', requireAuth, (req, res) => {
+app.get('/api/debug/credentials', requireAuth, async (req, res) => {
   const result = {
     hasCredentialsBase64: !!process.env.GOOGLE_CREDENTIALS_BASE64,
     hasCredentialsJson: !!process.env.GOOGLE_CREDENTIALS,
     hasClientEmail: !!process.env.GOOGLE_CLIENT_EMAIL,
     hasPrivateKey: !!process.env.GOOGLE_PRIVATE_KEY,
+    rootFolderId: process.env.GOOGLE_ROOT_FOLDER_ID || '(未设置，使用 root)',
     privateKeyLength: 0,
     privateKeyBegins: false,
     privateKeyEnds: false,
@@ -177,11 +178,13 @@ app.get('/api/debug/credentials', requireAuth, (req, res) => {
   };
 
   let key = '';
+  let clientEmail = '';
   if (process.env.GOOGLE_CREDENTIALS_BASE64) {
     try {
       const json = Buffer.from(process.env.GOOGLE_CREDENTIALS_BASE64, 'base64').toString('utf-8');
       const creds = JSON.parse(json);
       key = creds.private_key || '';
+      clientEmail = creds.client_email || '';
       result.method = 'GOOGLE_CREDENTIALS_BASE64';
     } catch (e) {
       result.error = 'GOOGLE_CREDENTIALS_BASE64 解析失败: ' + e.message;
@@ -190,12 +193,14 @@ app.get('/api/debug/credentials', requireAuth, (req, res) => {
     try {
       const creds = JSON.parse(process.env.GOOGLE_CREDENTIALS);
       key = creds.private_key || '';
+      clientEmail = creds.client_email || '';
       result.method = 'GOOGLE_CREDENTIALS';
     } catch (e) {
       result.error = 'GOOGLE_CREDENTIALS 解析失败: ' + e.message;
     }
   } else {
     key = process.env.GOOGLE_PRIVATE_KEY || '';
+    clientEmail = process.env.GOOGLE_CLIENT_EMAIL || '';
     result.method = 'GOOGLE_CLIENT_EMAIL + GOOGLE_PRIVATE_KEY';
   }
 
@@ -205,8 +210,27 @@ app.get('/api/debug/credentials', requireAuth, (req, res) => {
   result.privateKeyBegins = key.includes('-----BEGIN PRIVATE KEY-----');
   result.privateKeyEnds = key.includes('-----END PRIVATE KEY-----');
   result.privateKeyHasNewlines = key.includes('\n');
-  result.privateKeyFirst30 = key.substring(0, 30);
-  result.privateKeyLast30 = key.substring(key.length - 30);
+  result.serviceAccountEmail = clientEmail;
+
+  // 尝试验证文件夹是否可访问
+  if (process.env.GOOGLE_ROOT_FOLDER_ID) {
+    try {
+      const g = require('./lib/gdrive');
+      const testList = await g.listItems('');
+      result.rootFolderAccessible = true;
+      result.rootFolderItemCount = (testList.folders?.length || 0) + (testList.files?.length || 0);
+    } catch (e) {
+      result.rootFolderAccessible = false;
+      result.rootFolderError = e.message;
+    }
+  } else {
+    result.rootFolderAccessible = false;
+    result.rootFolderError = 'GOOGLE_ROOT_FOLDER_ID 未设置！请按以下步骤配置：\n' +
+      '1. 在你的 Google Drive 中创建一个文件夹\n' +
+      '2. 右键该文件夹 → 共享 → 添加上面的 Service Account 邮箱 → 设为编辑者\n' +
+      '3. 从文件夹 URL 中获取文件夹 ID\n' +
+      '4. 在 Render.com 环境变量中设置 GOOGLE_ROOT_FOLDER_ID = 文件夹ID';
+  }
 
   res.json(result);
 });
