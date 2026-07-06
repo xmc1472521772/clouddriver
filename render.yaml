@@ -1,0 +1,23 @@
+# Render.com 部署配置
+# 文档: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: personal-clouddrive
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    healthCheckPath: /api/auth/check
+    envVars:
+      - key: NODE_VERSION
+        value: 18.17.0
+      - key: AUTH_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_EMAIL
+        sync: false
+      - key: GOOGLE_PRIVATE_KEY
+        sync: false
+      - key: GOOGLE_ROOT_FOLDER_ID
+        sync: false
