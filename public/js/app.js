@@ -29,9 +29,11 @@ async function api(url, options = {}) {
 
   const res = await fetch(url, { ...options, headers });
 
-  if (res.status === 401) {
+  // 登录接口的 401 是密码错误，不应该触发登出逻辑
+  const isLoginRequest = url === '/api/login';
+  if (res.status === 401 && !isLoginRequest) {
     logout();
-    throw new Error('登录已过期');
+    throw new Error('登录已过期，请重新登录');
   }
 
   const data = await res.json();
@@ -176,18 +178,46 @@ document.getElementById('logoutBtn').addEventListener('click', logout);
 // 文件列表
 // ===========================================
 
+let _isLoadingFiles = false;   // 防止并发加载
+let _loadRequestId = 0;        // 请求 ID，忽略过期响应
+
 async function loadFiles(folderId) {
   if (folderId !== undefined) {
     state.currentFolderId = folderId;
   }
+
+  // 生成唯一请求 ID，用于忽略过期响应
+  const requestId = ++_loadRequestId;
+  _isLoadingFiles = true;
+  showFileListLoading();
+
   try {
     const data = await api(`/api/files?folderId=${encodeURIComponent(state.currentFolderId)}`);
+    // 如果在等待期间用户又点了其他文件夹，忽略这个过期的响应
+    if (requestId !== _loadRequestId) return;
     state.items = data;
     renderFileList();
     renderBreadcrumb();
   } catch (err) {
+    if (requestId !== _loadRequestId) return;
     showToast('加载文件失败: ' + err.message, 'error');
+  } finally {
+    if (requestId === _loadRequestId) {
+      _isLoadingFiles = false;
+      hideFileListLoading();
+    }
   }
+}
+
+function showFileListLoading() {
+  const listEl = document.getElementById('fileList');
+  const emptyEl = document.getElementById('emptyState');
+  emptyEl.style.display = 'none';
+  listEl.innerHTML = '<div class="file-list-loading"><div class="file-list-spinner"></div>加载中...</div>';
+}
+
+function hideFileListLoading() {
+  // renderFileList() 会替换 innerHTML，无需额外处理
 }
 
 function renderFileList() {
@@ -286,6 +316,8 @@ function renderFileList() {
         const id = item.dataset.id;
         const name = item.dataset.name;
         if (type === 'folder') {
+          // 防止加载中重复点击导致面包屑重复
+          if (_isLoadingFiles) return;
           // 进入文件夹
           state.folderStack.push({ id, name });
           loadFiles(id);
