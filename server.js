@@ -13,7 +13,14 @@ const PORT = process.env.PORT || 3000;
 
 // 中间件
 app.use(cors());
-app.use(express.json());
+// 对非上传路由使用 JSON 解析（避免消费文件上传的请求体）
+app.use((req, res, next) => {
+  if (req.path === '/api/files/upload' && req.method === 'POST') {
+    next();
+  } else {
+    express.json()(req, res, next);
+  }
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ===========================================
@@ -58,15 +65,27 @@ app.get('/api/files', requireAuth, async (req, res) => {
 
 // 上传文件（服务器中转到 Google Drive，避免 CORS）
 app.post('/api/files/upload', requireAuth, async (req, res) => {
+  const fileName = req.query.fileName;
+  const folderId = req.query.folderId || '';
+  const contentType = req.query.contentType || 'application/octet-stream';
+
+  if (!fileName) {
+    // 消费请求体，避免 HTTP/2 协议错误
+    req.resume();
+    return res.status(400).json({ error: '缺少文件名' });
+  }
+
+  // 跟踪客户端是否中断
+  let clientAborted = false;
+  req.on('aborted', () => {
+    clientAborted = true;
+  });
+  req.on('error', (err) => {
+    console.error('请求流错误:', err.message);
+    clientAborted = true;
+  });
+
   try {
-    const fileName = req.query.fileName;
-    const folderId = req.query.folderId || '';
-    const contentType = req.query.contentType || 'application/octet-stream';
-
-    if (!fileName) {
-      return res.status(400).json({ error: '缺少文件名' });
-    }
-
     // 将请求流直接 pipe 到 Google Drive
     const result = await gdrive.uploadFile(
       req,
@@ -75,10 +94,18 @@ app.post('/api/files/upload', requireAuth, async (req, res) => {
       decodeURIComponent(contentType)
     );
 
+    if (clientAborted) return;
     res.json({ message: '上传成功', id: result.id, name: result.name });
   } catch (err) {
     console.error('上传失败:', err);
-    res.status(500).json({ error: '上传失败: ' + err.message });
+    if (clientAborted) return;
+    // 消费剩余请求体，避免 HTTP/2 协议错误
+    // （当 Google Drive 端出错时，客户端可能仍在发送数据，
+    //   此时直接发送响应会导致 HTTP/2 PROTOCOL_ERROR）
+    req.resume();
+    if (!res.headersSent) {
+      res.status(500).json({ error: '上传失败: ' + err.message });
+    }
   }
 });
 
@@ -200,8 +227,14 @@ app.get('*', (req, res) => {
 });
 
 // 启动服务器
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`\n🚀 个人云网盘已启动!`);
   console.log(`   本地访问: http://localhost:${PORT}`);
   console.log(`   存储后端: Google Drive API (15GB 免费)\n`);
 });
+
+// 禁用超时，支持大文件上传
+server.timeout = 0;               // 禁用 socket 超时
+server.requestTimeout = 0;         // 禁用请求超时（默认 5 分钟，大文件不够）
+server.keepAliveTimeout = 120000;  // 2 分钟 keep-alive
+server.headersTimeout = 125000;    // 2 分钟 + 5 秒 headers 超时
