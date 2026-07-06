@@ -126,11 +126,30 @@
     </div>
   </div>
 
+  <!-- ==================== 移动文件弹窗 ==================== -->
+  <div class="modal-overlay" id="moveModal" style="display:none;">
+    <div class="modal modal-move">
+      <h3>移动到</h3>
+      <div class="move-breadcrumb" id="moveBreadcrumb"></div>
+      <div class="move-folder-list" id="moveFolderList">
+        <!-- 文件夹列表动态生成 -->
+      </div>
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeMoveModal()">取消</button>
+        <button class="btn-primary" id="confirmMoveBtn">移动到此处</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== 右键菜单 ==================== -->
   <div class="context-menu" id="contextMenu" style="display:none;">
     <div class="context-menu-item" id="ctxDownload">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
       下载
+    </div>
+    <div class="context-menu-item" id="ctxMove">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3"/><path d="M9 5l3-3 3 3"/><path d="M15 19l-3 3-3-3"/><path d="M19 9l3 3-3 3"/><path d="M2 12h20"/><path d="M12 2v20"/></svg>
+      移动到
     </div>
     <div class="context-menu-item" id="ctxRename">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>

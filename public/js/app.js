@@ -235,6 +235,9 @@ function renderFileList() {
             <div class="file-meta">文件夹</div>
           </div>
           <div class="file-actions">
+            <button class="file-action-btn" onclick="event.stopPropagation(); openMoveModal('${escapeAttr(folder.id)}', '${escapeAttr(folder.name)}', true)" title="移动">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3"/><path d="M9 5l3-3 3 3"/><path d="M15 19l-3 3-3-3"/><path d="M19 9l3 3-3 3"/><path d="M2 12h20"/><path d="M12 2v20"/></svg>
+            </button>
             <button class="file-action-btn" onclick="event.stopPropagation(); openRenameModal('${escapeAttr(folder.id)}', '${escapeAttr(folder.name)}', true)" title="重命名">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
@@ -259,6 +262,9 @@ function renderFileList() {
           <div class="file-actions">
             <button class="file-action-btn" onclick="event.stopPropagation(); downloadFile('${escapeAttr(file.id)}', '${escapeAttr(file.name)}')" title="下载">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </button>
+            <button class="file-action-btn" onclick="event.stopPropagation(); openMoveModal('${escapeAttr(file.id)}', '${escapeAttr(file.name)}', false)" title="移动">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3"/><path d="M9 5l3-3 3 3"/><path d="M15 19l-3 3-3-3"/><path d="M19 9l3 3-3 3"/><path d="M2 12h20"/><path d="M12 2v20"/></svg>
             </button>
             <button class="file-action-btn" onclick="event.stopPropagation(); openRenameModal('${escapeAttr(file.id)}', '${escapeAttr(file.name)}', false)" title="重命名">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -600,6 +606,151 @@ document.getElementById('renameInput').addEventListener('keydown', (e) => {
 });
 
 // ===========================================
+// 移动文件
+// ===========================================
+
+let moveTarget = null;  // { fileId, isFolder, fileName }
+let moveState = {
+  currentFolderId: '',           // 当前浏览的文件夹 ID
+  folderStack: [{ id: '', name: '全部文件' }],  // 导航栈
+};
+
+function openMoveModal(fileId, name, isFolder) {
+  moveTarget = { fileId, isFolder, fileName: name };
+  // 重置到根目录
+  moveState.currentFolderId = '';
+  moveState.folderStack = [{ id: '', name: '全部文件' }];
+  document.getElementById('moveModal').style.display = 'flex';
+  loadMoveFolders('');
+}
+
+function closeMoveModal() {
+  document.getElementById('moveModal').style.display = 'none';
+  moveTarget = null;
+}
+
+// 加载移动弹窗中的文件夹列表
+async function loadMoveFolders(folderId) {
+  const listEl = document.getElementById('moveFolderList');
+  listEl.innerHTML = '<div class="move-loading">加载中...</div>';
+
+  try {
+    const data = await api(`/api/files?folderId=${encodeURIComponent(folderId)}`);
+    renderMoveFolders(data.folders || []);
+    renderMoveBreadcrumb();
+  } catch (err) {
+    listEl.innerHTML = `<div class="move-empty">加载失败: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderMoveFolders(folders) {
+  const listEl = document.getElementById('moveFolderList');
+
+  if (folders.length === 0) {
+    listEl.innerHTML = '<div class="move-empty">此文件夹中没有子文件夹</div>';
+    return;
+  }
+
+  let html = '';
+  for (const folder of folders) {
+    // 不能移动到自身（如果是文件夹）
+    const isSelf = moveTarget && moveTarget.isFolder && folder.id === moveTarget.fileId;
+    if (isSelf) continue;  // 跳过自身
+
+    html += `
+      <div class="move-folder-item" data-id="${escapeAttr(folder.id)}" data-name="${escapeAttr(folder.name)}">
+        <span class="move-folder-icon">📁</span>
+        <span class="move-folder-name">${escapeHtml(folder.name)}</span>
+        <span class="move-folder-arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </span>
+      </div>
+    `;
+  }
+
+  if (!html) {
+    listEl.innerHTML = '<div class="move-empty">此文件夹中没有子文件夹</div>';
+    return;
+  }
+
+  listEl.innerHTML = html;
+
+  // 绑定点击事件 — 双击进入文件夹，单击选中
+  listEl.querySelectorAll('.move-folder-item').forEach((item) => {
+    item.addEventListener('click', () => {
+      const id = item.dataset.id;
+      const name = item.dataset.name;
+      // 进入该文件夹
+      moveState.currentFolderId = id;
+      moveState.folderStack.push({ id, name });
+      loadMoveFolders(id);
+    });
+  });
+}
+
+function renderMoveBreadcrumb() {
+  const el = document.getElementById('moveBreadcrumb');
+  let html = '';
+
+  for (let i = 0; i < moveState.folderStack.length; i++) {
+    const item = moveState.folderStack[i];
+    const isLast = i === moveState.folderStack.length - 1;
+
+    if (i > 0) {
+      html += '<span class="move-breadcrumb-sep">›</span>';
+    }
+    html += `<span class="move-breadcrumb-item ${isLast ? 'current' : ''}" data-index="${i}">${escapeHtml(item.name)}</span>`;
+  }
+
+  el.innerHTML = html;
+
+  el.querySelectorAll('.move-breadcrumb-item').forEach((item) => {
+    if (!item.classList.contains('current')) {
+      item.addEventListener('click', () => {
+        const index = parseInt(item.dataset.index);
+        moveState.folderStack = moveState.folderStack.slice(0, index + 1);
+        moveState.currentFolderId = moveState.folderStack[moveState.folderStack.length - 1].id;
+        loadMoveFolders(moveState.currentFolderId);
+      });
+    }
+  });
+}
+
+document.getElementById('confirmMoveBtn').addEventListener('click', async () => {
+  if (!moveTarget) return;
+
+  const targetFolderId = moveState.currentFolderId;
+  const btn = document.getElementById('confirmMoveBtn');
+
+  // 检查是否移动到当前所在文件夹（无需移动）
+  if (targetFolderId === state.currentFolderId) {
+    showToast('文件已在此文件夹中', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '移动中...';
+
+  try {
+    await api('/api/files/move', {
+      method: 'POST',
+      body: JSON.stringify({
+        fileId: moveTarget.fileId,
+        targetFolderId: targetFolderId,
+      }),
+    });
+    showToast(`已移动「${moveTarget.fileName}」`, 'success');
+    closeMoveModal();
+    loadFiles();
+  } catch (err) {
+    showToast('移动失败: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '移动到此处';
+  }
+});
+
+// ===========================================
 // 右键菜单
 // ===========================================
 
@@ -621,6 +772,12 @@ document.addEventListener('click', () => {
 
 document.getElementById('ctxDownload').addEventListener('click', () => {
   if (state.contextItem) downloadFile(state.contextItem.id, state.contextItem.name);
+});
+
+document.getElementById('ctxMove').addEventListener('click', () => {
+  if (state.contextItem) {
+    openMoveModal(state.contextItem.id, state.contextItem.name, state.contextItem.type === 'folder');
+  }
 });
 
 document.getElementById('ctxRename').addEventListener('click', () => {
@@ -680,6 +837,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeFolderModal();
     closeRenameModal();
+    closeMoveModal();
     document.getElementById('contextMenu').style.display = 'none';
   }
 });
@@ -690,6 +848,9 @@ document.getElementById('folderModal').addEventListener('click', (e) => {
 });
 document.getElementById('renameModal').addEventListener('click', (e) => {
   if (e.target.id === 'renameModal') closeRenameModal();
+});
+document.getElementById('moveModal').addEventListener('click', (e) => {
+  if (e.target.id === 'moveModal') closeMoveModal();
 });
 
 // ===========================================

@@ -179,6 +179,23 @@ app.patch('/api/files/rename', requireAuth, async (req, res) => {
   }
 });
 
+// 移动文件或文件夹
+app.post('/api/files/move', requireAuth, async (req, res) => {
+  try {
+    const { fileId, targetFolderId } = req.body;
+
+    if (!fileId) {
+      return res.status(400).json({ error: '缺少文件ID' });
+    }
+
+    await gdrive.moveItem(fileId, targetFolderId || '');
+    res.json({ message: '移动成功' });
+  } catch (err) {
+    console.error('移动失败:', err);
+    res.status(500).json({ error: '移动失败: ' + err.message });
+  }
+});
+
 // 获取存储使用量
 app.get('/api/storage/usage', requireAuth, async (req, res) => {
   try {
