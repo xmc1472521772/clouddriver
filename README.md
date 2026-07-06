@@ -53,25 +53,28 @@
 
 > ⚠️ 此 JSON 文件包含你的私钥，相当于密码，切勿公开分享或提交到 Git。
 
-### 第 3 步：提取环境变量
+### 第 3 步：将 JSON 密钥文件转为 base64（推荐方式）
 
-打开下载的 JSON 密钥文件，内容类似：
+将下载的 JSON 密钥文件**整体 base64 编码**，这样可以完全避免换行符问题（部署到 Render.com 等平台时最可靠）。
 
-```json
-{
-  "type": "service_account",
-  "project_id": "my-clouddrive-123456",
-  "private_key_id": "abc123...",
-  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQ...\n-----END PRIVATE KEY-----\n",
-  "client_email": "clouddrive-bot@my-clouddrive-123456.iam.gserviceaccount.com",
-  "client_id": "123456789...",
-  ...
-}
+**生成 base64 字符串：**
+
+```bash
+# Mac / Linux:
+base64 -i your-key-file.json | tr -d '\n'
+
+# Windows (PowerShell):
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("your-key-file.json"))
+
+# 或者用 Node.js (所有平台通用):
+node -e "console.log(require('fs').readFileSync('your-key-file.json').toString('base64'))"
 ```
 
-从中提取两个字段：
-- `client_email` → 对应环境变量 `GOOGLE_CLIENT_EMAIL`
-- `private_key` → 对应环境变量 `GOOGLE_PRIVATE_KEY`（**整个值原样复制，包括 `\n`**）
+将输出的 base64 字符串保存好，后面配置环境变量时填入 `GOOGLE_CREDENTIALS_BASE64`。
+
+> 💡 base64 方式不需要手动提取 `client_email` 和 `private_key`，整个文件编码后即可使用，最省心。
+>
+> 如果不想用 base64，也可以在 `.env` 中分别配置 `GOOGLE_CLIENT_EMAIL` 和 `GOOGLE_PRIVATE_KEY`（从 JSON 密钥文件中复制对应字段值）。
 
 ### 第 4 步：本地配置并测试
 
@@ -90,21 +93,24 @@
    ```bash
    cp .env.example .env
    ```
-   编辑 `.env` 文件：
+      编辑 `.env` 文件（推荐使用 base64 方式）：
    ```env
    PORT=3000
    AUTH_PASSWORD=你的登录密码
    JWT_SECRET=随便一串随机字符
 
-   # 从 JSON 密钥文件中复制
-   GOOGLE_CLIENT_EMAIL=clouddrive-bot@my-clouddrive-123456.iam.gserviceaccount.com
-   GOOGLE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\nMIIEvQ...\n-----END PRIVATE KEY-----\n
+   # 方式 1（推荐）: base64 编码的整个 JSON 密钥文件
+   GOOGLE_CREDENTIALS_BASE64=第3步生成的base64字符串
 
    # 留空使用根目录
    GOOGLE_ROOT_FOLDER_ID=
    ```
 
-   > 💡 **私钥配置提示**：将 JSON 中的 `private_key` 值**原样粘贴**到 `.env` 文件中。代码会自动处理 `\n` 转义。
+   > 💡 如果不想用 base64，也可以使用方式 3 分别配置：
+   > ```env
+   > GOOGLE_CLIENT_EMAIL=从JSON密钥文件复制的client_email
+   > GOOGLE_PRIVATE_KEY=从JSON密钥文件复制的private_key
+   > ```
 
 4. **启动**
    ```bash
@@ -135,20 +141,27 @@
    - **Start Command**: `node server.js`
    - **Plan**: `Free`
 
-5. 在 **Environment** 中添加环境变量：
+5. 在 **Environment** 中添加环境变量（**推荐使用 base64 方式**）：
    - `AUTH_PASSWORD` — 你的登录密码
    - `JWT_SECRET` — JWT 密钥
-   - `GOOGLE_CLIENT_EMAIL` — 从 JSON 密钥文件中复制的 client_email
-   - `GOOGLE_PRIVATE_KEY` — 从 JSON 密钥文件中复制的 private_key（**原样粘贴，包含 \n**）
+   - `GOOGLE_CREDENTIALS_BASE64` — 第 3 步生成的 base64 字符串（**推荐！最可靠**）
    - `GOOGLE_ROOT_FOLDER_ID` — 留空即可
 
-   > ⚠️ 在 Render 中添加 `GOOGLE_PRIVATE_KEY` 时，将整个私钥值粘贴进去（包括 `-----BEGIN PRIVATE KEY-----` 和 `-----END PRIVATE KEY-----`），`\n` 保持原样即可。
+   > ⚠️ **强烈建议使用 `GOOGLE_CREDENTIALS_BASE64`**，而不是分开配置 `GOOGLE_PRIVATE_KEY`。
+   > 因为 Render.com 等平台处理环境变量中的换行符 `\n` 时容易出错，导致私钥解析失败
+   > （报错 `DECODER routines::unsupported`）。base64 编码完全避免这个问题。
 
 6. 点击 **Create Web Service**，等待部署完成
 
-7. 部署成功后，Render 会给你一个公网地址，如 `https://personal-clouddrive.onrender.com`
+7. 部署成功后，Render 会给你一个公网地址，如 `https://clouddriver.onrender.com`
 
 8. 访问该地址，输入密码登录，开始使用！🌐
+
+9. **如果遇到问题**，可以访问调试接口检查凭据配置：
+   ```
+   https://你的域名/api/debug/credentials
+   ```
+   （需要先登录获取 token，在请求头中携带 `Authorization: Bearer <token>`）
 
 > ⚠️ Render 免费版会在 15 分钟无访问后休眠，首次唤醒需约 30 秒。个人使用完全够用。
 
@@ -182,6 +195,12 @@ clouddriver/
 - 下载 URL 中的 access token 有效期 1 小时，且需先通过 JWT 认证才能获取
 
 ## 💡 常见问题
+
+**Q: 上传文件报错 `DECODER routines::unsupported` 怎么办？**
+A: 这是 `GOOGLE_PRIVATE_KEY` 环境变量的换行符 `\n` 在部署平台上没有正确处理导致的。解决方案：**使用 `GOOGLE_CREDENTIALS_BASE64` 代替分开配置**。将整个 JSON 密钥文件 base64 编码后设置为环境变量，代码会自动解析，完全避免换行符问题。
+
+**Q: 如何检查凭据是否配置正确？**
+A: 登录后访问 `/api/debug/credentials` 接口，它会显示私钥的格式信息（不暴露密钥内容），帮助你诊断问题。
 
 **Q: 为什么用 Google Drive API 而不是 Cloudflare R2？**
 A: Google Drive API 提供 15GB 免费存储且**无需绑定信用卡**，只需一个 Google 账号即可使用。Cloudflare R2 虽然也有 10GB 免费额度，但需要绑定信用卡。

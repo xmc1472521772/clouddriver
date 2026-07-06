@@ -157,6 +157,54 @@ app.get('/api/storage/usage', requireAuth, async (req, res) => {
   }
 });
 
+// 调试端点 — 检查 Google 凭据配置是否正确（不暴露敏感信息）
+app.get('/api/debug/credentials', requireAuth, (req, res) => {
+  const result = {
+    hasCredentialsBase64: !!process.env.GOOGLE_CREDENTIALS_BASE64,
+    hasCredentialsJson: !!process.env.GOOGLE_CREDENTIALS,
+    hasClientEmail: !!process.env.GOOGLE_CLIENT_EMAIL,
+    hasPrivateKey: !!process.env.GOOGLE_PRIVATE_KEY,
+    privateKeyLength: 0,
+    privateKeyBegins: false,
+    privateKeyEnds: false,
+    privateKeyHasNewlines: false,
+  };
+
+  let key = '';
+  if (process.env.GOOGLE_CREDENTIALS_BASE64) {
+    try {
+      const json = Buffer.from(process.env.GOOGLE_CREDENTIALS_BASE64, 'base64').toString('utf-8');
+      const creds = JSON.parse(json);
+      key = creds.private_key || '';
+      result.method = 'GOOGLE_CREDENTIALS_BASE64';
+    } catch (e) {
+      result.error = 'GOOGLE_CREDENTIALS_BASE64 解析失败: ' + e.message;
+    }
+  } else if (process.env.GOOGLE_CREDENTIALS) {
+    try {
+      const creds = JSON.parse(process.env.GOOGLE_CREDENTIALS);
+      key = creds.private_key || '';
+      result.method = 'GOOGLE_CREDENTIALS';
+    } catch (e) {
+      result.error = 'GOOGLE_CREDENTIALS 解析失败: ' + e.message;
+    }
+  } else {
+    key = process.env.GOOGLE_PRIVATE_KEY || '';
+    result.method = 'GOOGLE_CLIENT_EMAIL + GOOGLE_PRIVATE_KEY';
+  }
+
+  // 清理后检查
+  key = key.replace(/\\n/g, '\n').trim();
+  result.privateKeyLength = key.length;
+  result.privateKeyBegins = key.includes('-----BEGIN PRIVATE KEY-----');
+  result.privateKeyEnds = key.includes('-----END PRIVATE KEY-----');
+  result.privateKeyHasNewlines = key.includes('\n');
+  result.privateKeyFirst30 = key.substring(0, 30);
+  result.privateKeyLast30 = key.substring(key.length - 30);
+
+  res.json(result);
+});
+
 // SPA 回退 - 所有非 API 路由返回 index.html
 app.get('*', (req, res) => {
   if (!req.path.startsWith('/api/')) {

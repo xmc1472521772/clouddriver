@@ -15,9 +15,13 @@ services:
         sync: false
       - key: JWT_SECRET
         sync: false
-      - key: GOOGLE_CLIENT_EMAIL
+      # 推荐: 使用 base64 编码的 JSON 密钥文件（最可靠，无换行问题）
+      - key: GOOGLE_CREDENTIALS_BASE64
         sync: false
-      - key: GOOGLE_PRIVATE_KEY
-        sync: false
+      # 备选: 也可使用下面分开配置的方式
+      # - key: GOOGLE_CLIENT_EMAIL
+      #   sync: false
+      # - key: GOOGLE_PRIVATE_KEY
+      #   sync: false
       - key: GOOGLE_ROOT_FOLDER_ID
         sync: false
