@@ -357,6 +357,10 @@ function renderBreadcrumb() {
 
   el.innerHTML = html;
 
+  // 动态更新浏览器标题
+  const currentName = state.folderStack[state.folderStack.length - 1].name;
+  document.title = currentName === '全部文件' ? '我的云盘' : `${currentName} - 我的云盘`;
+
   el.querySelectorAll('.breadcrumb-item').forEach((item) => {
     if (!item.classList.contains('active')) {
       item.addEventListener('click', () => {
