@@ -4,11 +4,11 @@
 
 ## ✨ 功能特性
 
-- 🔐 **密码登录** — JWT 认证，仅你一人可访问
+- 🔐 **密码登录** — JWT 认证，登录速率限制，仅你一人可访问
 - 📁 **文件管理** — 上传、下载、删除、重命名、新建文件夹
 - 📂 **文件夹导航** — 多层级文件夹，面包屑导航
 - 🖱️ **右键菜单** — 快速下载、重命名、删除
-- 📤 **拖拽上传** — 支持拖拽文件到浏览器上传，带实时进度条
+- 📤 **拖拽上传** — 支持拖拽文件到浏览器上传，带实时进度条和并发限制
 - 🔍 **即时搜索** — 快速搜索当前文件夹内的文件
 - 📊 **存储监控** — 实时显示存储使用量
 - 📱 **响应式设计** — 手机、平板、电脑都能用
@@ -23,13 +23,13 @@
 | 存储 | Google Drive API | 15GB 存储，永久免费 |
 | 托管 | Render.com | 750 小时/月 |
 | 前端 | 原生 HTML/CSS/JS | 无需构建 |
-| 认证 | JWT | — |
+| 认证 | JWT + OAuth2 | — |
 
-文件上传使用**可恢复上传会话**直连 Google Drive，不经过服务器中转，支持大文件。
+文件上传和下载均通过服务器中转，支持大文件流式传输。
 
 ---
 
-## 🚀 快速开始（5 步完成部署）
+## 🚀 快速开始
 
 ### 第 1 步：创建 Google Cloud 项目并启用 Drive API
 
@@ -40,41 +40,28 @@
 3. 在左侧菜单选择 **API 和服务** → **已启用的 API**
 4. 点击 **+ 启用 API**，搜索 `Google Drive API`，点击 **启用**
 
-### 第 2 步：创建 Service Account（服务账号）
+### 第 2 步：创建 OAuth2 凭据
 
 1. 在左侧菜单选择 **API 和服务** → **凭据**
-2. 点击 **+ 创建凭据** → **服务账号**
-3. 填写服务账号名称：`clouddrive-bot`，点击 **创建并继续**
-4. 跳过"授予访问权限"和"授予用户访问权限"，直接点击 **完成**
-5. 在服务账号列表中，点击刚创建的服务账号
-6. 进入 **密钥** 标签页 → **添加密钥** → **创建新密钥**
-7. 密钥类型选择 **JSON**，点击 **创建**
-8. 浏览器会自动下载一个 JSON 文件，**请妥善保管此文件**
+2. 点击 **+ 创建凭据** → **OAuth 客户端 ID**
+   - 如果提示配置"同意屏幕"，按提示完成配置（测试模式即可）
+3. 应用类型选择 **Web 应用**
+4. 名称填写 `clouddrive`（自定义）
+5. **已授权的重定向 URI** 填写：`http://localhost:3001/oauth2callback`
+6. 点击 **创建**
+7. 记下 **Client ID** 和 **Client Secret**
 
-> ⚠️ 此 JSON 文件包含你的私钥，相当于密码，切勿公开分享或提交到 Git。
+### 第 3 步：获取 Refresh Token
 
-### 第 3 步：将 JSON 密钥文件转为 base64（推荐方式）
-
-将下载的 JSON 密钥文件**整体 base64 编码**，这样可以完全避免换行符问题（部署到 Render.com 等平台时最可靠）。
-
-**生成 base64 字符串：**
+在本地运行授权脚本，获取 refresh token：
 
 ```bash
-# Mac / Linux:
-base64 -i your-key-file.json | tr -d '\n'
-
-# Windows (PowerShell):
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("your-key-file.json"))
-
-# 或者用 Node.js (所有平台通用):
-node -e "console.log(require('fs').readFileSync('your-key-file.json').toString('base64'))"
+node scripts/google-auth.js <CLIENT_ID> <CLIENT_SECRET>
 ```
 
-将输出的 base64 字符串保存好，后面配置环境变量时填入 `GOOGLE_CREDENTIALS_BASE64`。
-
-> 💡 base64 方式不需要手动提取 `client_email` 和 `private_key`，整个文件编码后即可使用，最省心。
->
-> 如果不想用 base64，也可以在 `.env` 中分别配置 `GOOGLE_CLIENT_EMAIL` 和 `GOOGLE_PRIVATE_KEY`（从 JSON 密钥文件中复制对应字段值）。
+1. 脚本会输出一个授权链接，在浏览器中打开
+2. 登录 Google 账号并授权
+3. 浏览器会自动跳转回本地，终端会输出 `GOOGLE_REFRESH_TOKEN`
 
 ### 第 4 步：本地配置并测试
 
@@ -93,24 +80,21 @@ node -e "console.log(require('fs').readFileSync('your-key-file.json').toString('
    ```bash
    cp .env.example .env
    ```
-      编辑 `.env` 文件（推荐使用 base64 方式）：
+   编辑 `.env` 文件：
    ```env
    PORT=3000
    AUTH_PASSWORD=你的登录密码
-   JWT_SECRET=随便一串随机字符
+   JWT_SECRET=随机字符串（建议至少32位）
 
-   # 方式 1（推荐）: base64 编码的整个 JSON 密钥文件
-   GOOGLE_CREDENTIALS_BASE64=第3步生成的base64字符串
+   GOOGLE_CLIENT_ID=第2步获取的Client ID
+   GOOGLE_CLIENT_SECRET=第2步获取的Client Secret
+   GOOGLE_REFRESH_TOKEN=第3步获取的Refresh Token
 
-   # 留空使用根目录
+   # 根文件夹 ID（可选，留空使用 Drive 根目录）
    GOOGLE_ROOT_FOLDER_ID=
    ```
 
-   > 💡 如果不想用 base64，也可以使用方式 3 分别配置：
-   > ```env
-   > GOOGLE_CLIENT_EMAIL=从JSON密钥文件复制的client_email
-   > GOOGLE_PRIVATE_KEY=从JSON密钥文件复制的private_key
-   > ```
+   > ⚠️ **必须设置 `AUTH_PASSWORD` 和 `JWT_SECRET` 环境变量**，否则服务器无法启动。
 
 4. **启动**
    ```bash
@@ -141,27 +125,19 @@ node -e "console.log(require('fs').readFileSync('your-key-file.json').toString('
    - **Start Command**: `node server.js`
    - **Plan**: `Free`
 
-5. 在 **Environment** 中添加环境变量（**推荐使用 base64 方式**）：
+5. 在 **Environment** 中添加环境变量：
    - `AUTH_PASSWORD` — 你的登录密码
    - `JWT_SECRET` — JWT 密钥
-   - `GOOGLE_CREDENTIALS_BASE64` — 第 3 步生成的 base64 字符串（**推荐！最可靠**）
+   - `GOOGLE_CLIENT_ID` — OAuth2 Client ID
+   - `GOOGLE_CLIENT_SECRET` — OAuth2 Client Secret
+   - `GOOGLE_REFRESH_TOKEN` — OAuth2 Refresh Token
    - `GOOGLE_ROOT_FOLDER_ID` — 留空即可
-
-   > ⚠️ **强烈建议使用 `GOOGLE_CREDENTIALS_BASE64`**，而不是分开配置 `GOOGLE_PRIVATE_KEY`。
-   > 因为 Render.com 等平台处理环境变量中的换行符 `\n` 时容易出错，导致私钥解析失败
-   > （报错 `DECODER routines::unsupported`）。base64 编码完全避免这个问题。
 
 6. 点击 **Create Web Service**，等待部署完成
 
 7. 部署成功后，Render 会给你一个公网地址，如 `https://clouddriver.onrender.com`
 
 8. 访问该地址，输入密码登录，开始使用！🌐
-
-9. **如果遇到问题**，可以访问调试接口检查凭据配置：
-   ```
-   https://你的域名/api/debug/credentials
-   ```
-   （需要先登录获取 token，在请求头中携带 `Authorization: Bearer <token>`）
 
 > ⚠️ Render 免费版会在 15 分钟无访问后休眠，首次唤醒需约 30 秒。个人使用完全够用。
 
@@ -176,8 +152,10 @@ clouddriver/
 ├── render.yaml            # Render.com 部署配置
 ├── .env.example           # 环境变量模板
 ├── lib/
-│   ├── gdrive.js          # Google Drive 存储客户端
+│   ├── gdrive.js          # Google Drive 存储客户端（OAuth2）
 │   └── auth.js            # JWT 认证中间件
+├── scripts/
+│   └── google-auth.js     # OAuth2 授权脚本（获取 refresh token）
 └── public/
     ├── index.html         # 主页面（登录 + 文件管理）
     ├── css/
@@ -189,39 +167,36 @@ clouddriver/
 ## 🔒 安全说明
 
 - 密码通过环境变量配置，不硬编码在代码中
+- 服务器启动时强制检查 `AUTH_PASSWORD` 和 `JWT_SECRET` 环境变量
+- 密码比较使用恒定时间算法，防止时序攻击
+- 登录接口有速率限制（15 分钟内最多 5 次尝试）
 - JWT Token 有效期 7 天，过期需重新登录
-- 文件上传使用可恢复上传会话 URL（有效期 1 小时）
-- Service Account 私钥仅存储在服务器端，不暴露给前端
-- 下载 URL 中的 access token 有效期 1 小时，且需先通过 JWT 认证才能获取
+- Token 通过 Authorization 请求头传递，不暴露在 URL 中
+- OAuth2 凭据仅存储在服务器端，不暴露给前端
+- 文件列表支持自动分页，可处理超过 200 个文件的目录
 
 ## 💡 常见问题
-
-**Q: 上传文件报错 `DECODER routines::unsupported` 怎么办？**
-A: 这是 `GOOGLE_PRIVATE_KEY` 环境变量的换行符 `\n` 在部署平台上没有正确处理导致的。解决方案：**使用 `GOOGLE_CREDENTIALS_BASE64` 代替分开配置**。将整个 JSON 密钥文件 base64 编码后设置为环境变量，代码会自动解析，完全避免换行符问题。
-
-**Q: 如何检查凭据是否配置正确？**
-A: 登录后访问 `/api/debug/credentials` 接口，它会显示私钥的格式信息（不暴露密钥内容），帮助你诊断问题。
 
 **Q: 为什么用 Google Drive API 而不是 Cloudflare R2？**
 A: Google Drive API 提供 15GB 免费存储且**无需绑定信用卡**，只需一个 Google 账号即可使用。Cloudflare R2 虽然也有 10GB 免费额度，但需要绑定信用卡。
 
 **Q: 文件上传有大小限制吗？**
-A: 单个文件最大 5TB（Google Drive 限制），总存储 15GB 免费额度。
+A: 单个文件最大 5TB（Google Drive 限制），总存储 15GB 免费额度。服务器超时设置为 30 分钟，支持大文件传输。
 
-**Q: Service Account 的 15GB 和我个人的 Google Drive 共享吗？**
-A: 不共享。Service Account 有自己独立的 15GB Drive 存储，与你的个人 Google Drive 互不影响。
+**Q: 使用的是谁的 Google Drive 空间？**
+A: 使用 OAuth2 用户授权方式，文件存储在你自己的 Google Drive 中，占用你账号的 15GB 免费额度。
+
+**Q: Refresh Token 会过期吗？**
+A: Google OAuth2 的 refresh token 在用户未撤销授权且未更改密码的情况下长期有效。如果 token 失效，重新运行 `scripts/google-auth.js` 获取新的即可。
 
 **Q: Render 免费版会休眠怎么办？**
 A: 15 分钟无访问会休眠，下次访问自动唤醒（约 30 秒）。如需常驻可使用 [UptimeRobot](https://uptimerobot.com) 定时 ping（免费）。
 
 **Q: 数据安全吗？**
-A: 文件存储在 Google Drive（Service Account 的独立空间），可靠性高。建议妥善保管 JSON 密钥文件。
-
-**Q: 如何查看 Service Account Drive 中的文件？**
-A: 可以在 Google Cloud Console 中使用 [Drive API Explorer](https://developers.google.com/drive/api/v3/reference/files/list) 查看文件列表，或通过本项目的 Web 界面管理。
+A: 文件存储在你的 Google Drive 中，可靠性高。建议妥善保管 OAuth2 凭据和 refresh token。
 
 **Q: 15GB 不够用怎么办？**
-A: 可以创建多个 Google Cloud 项目，每个项目都有独立的 15GB 额度。或升级到 Google One 付费计划。
+A: 可以升级到 Google One 付费计划，或创建多个 Google Cloud 项目。
 
 ## 📝 License
 

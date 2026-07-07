@@ -3,8 +3,8 @@
  * 基于 Google Drive API（15GB 免费，无需信用卡）
  */
 const express = require('express');
-const cors = require('cors');
 const path = require('path');
+const rateLimit = require('express-rate-limit');
 const { requireAuth, generateToken, verifyPassword } = require('./lib/auth');
 const gdrive = require('./lib/gdrive');
 
@@ -12,7 +12,6 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // 中间件
-app.use(cors());
 // 对非上传路由使用 JSON 解析（避免消费文件上传的请求体）
 app.use((req, res, next) => {
   if (req.path === '/api/files/upload' && req.method === 'POST') {
@@ -24,10 +23,27 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ===========================================
+// 健康检查端点（无需认证，供 Render.com 等平台使用）
+// ===========================================
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
+// ===========================================
 // 认证路由
 // ===========================================
 
-app.post('/api/login', (req, res) => {
+// 登录速率限制：15 分钟内最多 5 次尝试
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: '尝试次数过多，请 15 分钟后再试' },
+});
+
+app.post('/api/login', loginLimiter, (req, res) => {
   const { password } = req.body;
 
   if (!password) {
@@ -207,8 +223,12 @@ app.get('/api/storage/usage', requireAuth, async (req, res) => {
   }
 });
 
-// 调试端点 — 检查 Google OAuth2 配置是否正确
+// 调试端点 — 检查 Google OAuth2 配置是否正确（仅非生产环境）
 app.get('/api/debug/credentials', requireAuth, async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: '接口不存在' });
+  }
+
   const result = {
     authMethod: 'OAuth2',
     hasClientId: !!process.env.GOOGLE_CLIENT_ID,
@@ -220,8 +240,7 @@ app.get('/api/debug/credentials', requireAuth, async (req, res) => {
   // 如果配置了 OAuth2 凭据，尝试验证是否可用
   if (result.hasClientId && result.hasClientSecret && result.hasRefreshToken) {
     try {
-      const g = require('./lib/gdrive');
-      const testList = await g.listItems('');
+      const testList = await gdrive.listItems('');
       result.driveAccessible = true;
       result.rootFolderItemCount = (testList.folders?.length || 0) + (testList.files?.length || 0);
     } catch (e) {
@@ -238,9 +257,10 @@ app.get('/api/debug/credentials', requireAuth, async (req, res) => {
 
 // SPA 回退 - 所有非 API 路由返回 index.html
 app.get('*', (req, res) => {
-  if (!req.path.startsWith('/api/')) {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: '接口不存在' });
   }
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // 启动服务器
@@ -250,8 +270,8 @@ const server = app.listen(PORT, () => {
   console.log(`   存储后端: Google Drive API (15GB 免费)\n`);
 });
 
-// 禁用超时，支持大文件上传
-server.timeout = 0;               // 禁用 socket 超时
-server.requestTimeout = 0;         // 禁用请求超时（默认 5 分钟，大文件不够）
-server.keepAliveTimeout = 120000;  // 2 分钟 keep-alive
-server.headersTimeout = 125000;    // 2 分钟 + 5 秒 headers 超时
+// 超时设置，支持大文件上传/下载（30 分钟）
+server.timeout = 30 * 60 * 1000;          // socket 超时 30 分钟
+server.requestTimeout = 30 * 60 * 1000;    // 请求超时 30 分钟
+server.keepAliveTimeout = 120000;          // 2 分钟 keep-alive
+server.headersTimeout = 125000;            // 2 分钟 + 5 秒 headers 超时

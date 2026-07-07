@@ -6,7 +6,7 @@ services:
     plan: free
     buildCommand: npm install
     startCommand: node server.js
-    healthCheckPath: /api/auth/check
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
         value: 18.17.0

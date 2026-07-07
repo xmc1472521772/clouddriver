@@ -50,7 +50,7 @@ async function api(url, options = {}) {
 // ===========================================
 
 function formatSize(bytes) {
-  if (bytes === 0) return '0 B';
+  if (!bytes || bytes <= 0 || isNaN(bytes)) return '0 B';
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
@@ -101,12 +101,8 @@ function showToast(message, type = 'info') {
 
 function escapeHtml(str) {
   const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-function escapeAttr(str) {
-  return String(str).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+  div.textContent = String(str);
+  return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 // ===========================================
@@ -258,20 +254,20 @@ function renderFileList() {
     // 文件夹
     for (const folder of filteredFolders) {
       html += `
-        <div class="file-item" data-type="folder" data-id="${escapeAttr(folder.id)}" data-name="${escapeHtml(folder.name)}">
+        <div class="file-item" data-type="folder" data-id="${escapeHtml(folder.id)}" data-name="${escapeHtml(folder.name)}">
           <span class="file-icon">📁</span>
           <div class="file-info">
             <div class="file-name">${escapeHtml(folder.name)}</div>
             <div class="file-meta">文件夹</div>
           </div>
           <div class="file-actions">
-            <button class="file-action-btn" onclick="event.stopPropagation(); openMoveModal('${escapeAttr(folder.id)}', '${escapeAttr(folder.name)}', true)" title="移动">
+            <button class="file-action-btn" data-action="move" title="移动">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3"/><path d="M9 5l3-3 3 3"/><path d="M15 19l-3 3-3-3"/><path d="M19 9l3 3-3 3"/><path d="M2 12h20"/><path d="M12 2v20"/></svg>
             </button>
-            <button class="file-action-btn" onclick="event.stopPropagation(); openRenameModal('${escapeAttr(folder.id)}', '${escapeAttr(folder.name)}', true)" title="重命名">
+            <button class="file-action-btn" data-action="rename" title="重命名">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
-            <button class="file-action-btn danger" onclick="event.stopPropagation(); deleteItem('${escapeAttr(folder.id)}', '${escapeAttr(folder.name)}')" title="删除">
+            <button class="file-action-btn danger" data-action="delete" title="删除">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
           </div>
@@ -283,23 +279,23 @@ function renderFileList() {
     for (const file of filteredFiles) {
       const icon = getFileIcon(file.ext);
       html += `
-        <div class="file-item" data-type="file" data-id="${escapeAttr(file.id)}" data-name="${escapeHtml(file.name)}">
+        <div class="file-item" data-type="file" data-id="${escapeHtml(file.id)}" data-name="${escapeHtml(file.name)}">
           <span class="file-icon">${icon}</span>
           <div class="file-info">
             <div class="file-name">${escapeHtml(file.name)}</div>
             <div class="file-meta">${formatSize(file.size)} · ${formatDate(file.lastModified)}</div>
           </div>
           <div class="file-actions">
-            <button class="file-action-btn" onclick="event.stopPropagation(); downloadFile('${escapeAttr(file.id)}', '${escapeAttr(file.name)}')" title="下载">
+            <button class="file-action-btn" data-action="download" title="下载">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             </button>
-            <button class="file-action-btn" onclick="event.stopPropagation(); openMoveModal('${escapeAttr(file.id)}', '${escapeAttr(file.name)}', false)" title="移动">
+            <button class="file-action-btn" data-action="move" title="移动">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3"/><path d="M9 5l3-3 3 3"/><path d="M15 19l-3 3-3-3"/><path d="M19 9l3 3-3 3"/><path d="M2 12h20"/><path d="M12 2v20"/></svg>
             </button>
-            <button class="file-action-btn" onclick="event.stopPropagation(); openRenameModal('${escapeAttr(file.id)}', '${escapeAttr(file.name)}', false)" title="重命名">
+            <button class="file-action-btn" data-action="rename" title="重命名">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
-            <button class="file-action-btn danger" onclick="event.stopPropagation(); deleteItem('${escapeAttr(file.id)}', '${escapeAttr(file.name)}')" title="删除">
+            <button class="file-action-btn danger" data-action="delete" title="删除">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
             </button>
           </div>
@@ -308,34 +304,55 @@ function renderFileList() {
     }
 
     listEl.innerHTML = html;
-
-    // 绑定点击事件
-    listEl.querySelectorAll('.file-item').forEach((item) => {
-      item.addEventListener('click', () => {
-        const type = item.dataset.type;
-        const id = item.dataset.id;
-        const name = item.dataset.name;
-        if (type === 'folder') {
-          // 防止加载中重复点击导致面包屑重复
-          if (_isLoadingFiles) return;
-          // 进入文件夹
-          state.folderStack.push({ id, name });
-          loadFiles(id);
-        }
-      });
-
-      // 右键菜单
-      item.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        showContextMenu(e, item.dataset.type, item.dataset.id, item.dataset.name);
-      });
-    });
   }
 
   // 更新文件计数
   const totalCount = folders.length + files.length;
   countEl.textContent = totalCount > 0 ? `${totalCount} 个项目` : '';
 }
+
+// 文件列表事件委托（只需设置一次，无需每次渲染重新绑定）
+document.getElementById('fileList').addEventListener('click', (e) => {
+  // 操作按钮点击
+  const actionBtn = e.target.closest('.file-action-btn');
+  if (actionBtn) {
+    e.stopPropagation();
+    const item = actionBtn.closest('.file-item');
+    if (!item) return;
+    const id = item.dataset.id;
+    const name = item.dataset.name;
+    const type = item.dataset.type;
+    const action = actionBtn.dataset.action;
+
+    if (action === 'download') downloadFile(id, name);
+    else if (action === 'move') openMoveModal(id, name, type === 'folder');
+    else if (action === 'rename') openRenameModal(id, name, type === 'folder');
+    else if (action === 'delete') deleteItem(id, name);
+    return;
+  }
+
+  // 文件项点击（进入文件夹）
+  const fileItem = e.target.closest('.file-item');
+  if (fileItem) {
+    const type = fileItem.dataset.type;
+    const id = fileItem.dataset.id;
+    const name = fileItem.dataset.name;
+    if (type === 'folder') {
+      // 防止加载中重复点击导致面包屑重复
+      if (_isLoadingFiles) return;
+      state.folderStack.push({ id, name });
+      loadFiles(id);
+    }
+  }
+});
+
+// 右键菜单（事件委托）
+document.getElementById('fileList').addEventListener('contextmenu', (e) => {
+  const fileItem = e.target.closest('.file-item');
+  if (!fileItem) return;
+  e.preventDefault();
+  showContextMenu(e, fileItem.dataset.type, fileItem.dataset.id, fileItem.dataset.name);
+});
 
 // ===========================================
 // 面包屑导航
@@ -375,6 +392,27 @@ function renderBreadcrumb() {
 // ===========================================
 // 文件上传（通过服务器中转到 Google Drive）
 // ===========================================
+
+// 上传队列 — 限制并发数，避免同时上传过多文件
+const MAX_CONCURRENT_UPLOADS = 3;
+let activeUploads = 0;
+const uploadQueue = [];
+
+function enqueueUpload(file) {
+  uploadQueue.push(file);
+  processUploadQueue();
+}
+
+function processUploadQueue() {
+  while (activeUploads < MAX_CONCURRENT_UPLOADS && uploadQueue.length > 0) {
+    const file = uploadQueue.shift();
+    activeUploads++;
+    uploadFile(file).finally(() => {
+      activeUploads--;
+      processUploadQueue();
+    });
+  }
+}
 
 async function uploadFile(file) {
   const progressList = document.getElementById('uploadProgressList');
@@ -466,33 +504,43 @@ document.getElementById('uploadBtn').addEventListener('click', () => {
 
 document.getElementById('fileInput').addEventListener('change', (e) => {
   const files = Array.from(e.target.files);
-  files.forEach(uploadFile);
+  files.forEach(enqueueUpload);
   e.target.value = '';
 });
 
 // 拖拽上传
 const dropZone = document.getElementById('dropZone');
+let dragCounter = 0;
 
-['dragenter', 'dragover'].forEach((eventName) => {
-  dropZone.addEventListener(eventName, (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dropZone.classList.add('drag-over');
-  });
+dropZone.addEventListener('dragenter', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  dragCounter++;
+  dropZone.classList.add('drag-over');
 });
 
-['dragleave', 'drop'].forEach((eventName) => {
-  dropZone.addEventListener(eventName, (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (eventName === 'dragleave' && e.target !== dropZone) return;
+dropZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+});
+
+dropZone.addEventListener('dragleave', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  dragCounter--;
+  if (dragCounter <= 0) {
+    dragCounter = 0;
     dropZone.classList.remove('drag-over');
-  });
+  }
 });
 
 dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  dragCounter = 0;
+  dropZone.classList.remove('drag-over');
   const files = Array.from(e.dataTransfer.files);
-  files.forEach(uploadFile);
+  files.forEach(enqueueUpload);
 });
 
 // ===========================================
@@ -502,14 +550,25 @@ dropZone.addEventListener('drop', (e) => {
 async function downloadFile(fileId, fileName) {
   try {
     showToast('正在下载...', 'info');
-    // 通过服务器中转下载，避免 CORS 问题
     const url = `/api/files/download?fileId=${encodeURIComponent(fileId)}&fileName=${encodeURIComponent(fileName || '')}`;
+    const res = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${state.token}` },
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `下载失败 (${res.status})`);
+    }
+
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url + '&token=' + encodeURIComponent(state.token);
+    a.href = blobUrl;
     a.download = fileName || '';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
   } catch (err) {
     showToast('下载失败: ' + err.message, 'error');
   }
@@ -694,7 +753,7 @@ function renderMoveFolders(folders) {
     if (isSelf) continue;  // 跳过自身
 
     html += `
-      <div class="move-folder-item" data-id="${escapeAttr(folder.id)}" data-name="${escapeAttr(folder.name)}">
+      <div class="move-folder-item" data-id="${escapeHtml(folder.id)}" data-name="${escapeHtml(folder.name)}">
         <span class="move-folder-icon">📁</span>
         <span class="move-folder-name">${escapeHtml(folder.name)}</span>
         <span class="move-folder-arrow">
