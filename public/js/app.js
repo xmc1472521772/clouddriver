@@ -71,14 +71,32 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
 }
 
+// 压缩包文件 SVG 图标（带拉链的文件样式，比 emoji 更直观）
+const ARCHIVE_ICON_SVG = `<svg class="icon-archive" width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M8 2h10l8 8v18a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="#f59e0b"/>
+  <path d="M18 2l8 8h-8V2z" fill="#fcd34d"/>
+  <rect x="14.5" y="10" width="3" height="2" rx="0.5" fill="#fff"/>
+  <rect x="14.5" y="13.5" width="3" height="2" rx="0.5" fill="#fff"/>
+  <rect x="14.5" y="17" width="3" height="2" rx="0.5" fill="#fff"/>
+  <rect x="13" y="20" width="6" height="5" rx="1" fill="#fff"/>
+  <rect x="15" y="21.5" width="2" height="2" rx="0.3" fill="#f59e0b"/>
+</svg>`;
+
+// 压缩包文件扩展名集合
+const ARCHIVE_EXTS = ['zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'tgz', 'iso', 'cab', 'lz', 'zst'];
+
 function getFileIcon(ext) {
+  // 压缩包类型使用专属 SVG 图标
+  if (ARCHIVE_EXTS.includes(ext)) {
+    return ARCHIVE_ICON_SVG;
+  }
+
   const iconMap = {
     jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', bmp: '🖼️', webp: '🖼️', svg: '🖼️',
     mp4: '🎬', avi: '🎬', mov: '🎬', mkv: '🎬', wmv: '🎬', flv: '🎬',
     mp3: '🎵', wav: '🎵', flac: '🎵', aac: '🎵', ogg: '🎵', m4a: '🎵',
     pdf: '📕', doc: '📘', docx: '📘', xls: '📗', xlsx: '📗', ppt: '📙', pptx: '📙',
     js: '📜', ts: '📜', html: '📜', css: '📜', json: '📜', py: '📜', java: '📜', cpp: '📜', c: '📜', go: '📜', rs: '📜',
-    zip: '🗜️', rar: '🗜️', '7z': '🗜️', tar: '🗜️', gz: '🗜️',
     txt: '📄', md: '📄', log: '📄',
     exe: '⚙️', dmg: '⚙️', apk: '⚙️',
   };
