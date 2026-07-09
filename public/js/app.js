@@ -567,26 +567,20 @@ dropZone.addEventListener('drop', (e) => {
 
 async function downloadFile(fileId, fileName) {
   try {
-    showToast('正在下载...', 'info');
-    const url = `/api/files/download?fileId=${encodeURIComponent(fileId)}&fileName=${encodeURIComponent(fileName || '')}`;
-    const res = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${state.token}` },
-    });
+    showToast('开始下载...', 'info');
 
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || `下载失败 (${res.status})`);
-    }
-
-    const blob = await res.blob();
-    const blobUrl = URL.createObjectURL(blob);
+    // 使用原生浏览器下载（通过 query 参数传递 token，服务端 requireAuth 已支持）
+    // 避免使用 fetch + blob 方式——后者会将整个文件缓存在浏览器内存中，
+    // 导致下载进度条迟迟不出现，大文件时甚至可能导致浏览器崩溃。
+    // 原生下载方式由浏览器直接管理：立即弹出下载对话框、显示进度条、
+    // 流式写入磁盘（无需占用 JS 内存）、支持暂停/恢复。
+    const url = `/api/files/download?fileId=${encodeURIComponent(fileId)}&fileName=${encodeURIComponent(fileName || '')}&token=${encodeURIComponent(state.token)}`;
     const a = document.createElement('a');
-    a.href = blobUrl;
+    a.href = url;
     a.download = fileName || '';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(blobUrl);
   } catch (err) {
     showToast('下载失败: ' + err.message, 'error');
   }
