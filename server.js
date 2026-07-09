@@ -11,6 +11,16 @@ const gdrive = require('./lib/gdrive');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ===========================================
+// 全局异常安全网 — 防止未捕获的异常/拒绝导致进程崩溃（表现为 502）
+// ===========================================
+process.on('uncaughtException', (err) => {
+  console.error('❌ 未捕获的异常:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('❌ 未处理的 Promise 拒绝:', reason);
+});
+
 // 中间件
 // 对非上传路由使用 JSON 解析（避免消费文件上传的请求体）
 app.use((req, res, next) => {
