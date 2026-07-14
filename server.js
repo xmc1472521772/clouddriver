@@ -233,18 +233,30 @@ app.get('/api/storage/usage', requireAuth, async (req, res) => {
   }
 });
 
-// 调试端点 — 检查 Google OAuth2 配置是否正确（仅非生产环境）
+// 调试端点 — 检查 Google OAuth2 配置是否正确
+// 显示部分值（前几位字符）帮助确认配置是否正确，不暴露完整凭据
 app.get('/api/debug/credentials', requireAuth, async (req, res) => {
-  if (process.env.NODE_ENV === 'production') {
-    return res.status(404).json({ error: '接口不存在' });
-  }
+  const clientId = process.env.GOOGLE_CLIENT_ID || '';
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
+  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN || '';
 
   const result = {
     authMethod: 'OAuth2',
-    hasClientId: !!process.env.GOOGLE_CLIENT_ID,
-    hasClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
-    hasRefreshToken: !!process.env.GOOGLE_REFRESH_TOKEN,
+    hasClientId: !!clientId,
+    hasClientSecret: !!clientSecret,
+    hasRefreshToken: !!refreshToken,
+    // 只显示前几位和后几位，帮助确认是否正确
+    clientIdPreview: clientId ? `${clientId.substring(0, 10)}...${clientId.substring(clientId.length - 10)}` : '(未设置)',
+    clientIdLength: clientId.length,
+    clientSecretPreview: clientSecret ? `${clientSecret.substring(0, 4)}****` : '(未设置)',
+    clientSecretLength: clientSecret.length,
+    refreshTokenPreview: refreshToken ? `${refreshToken.substring(0, 4)}****` : '(未设置)',
+    refreshTokenLength: refreshToken.length,
     rootFolderId: process.env.GOOGLE_ROOT_FOLDER_ID || '(未设置，使用 root)',
+    // 检查是否有前后空格
+    clientIdHasWhitespace: clientId !== clientId.trim(),
+    clientSecretHasWhitespace: clientSecret !== clientSecret.trim(),
+    refreshTokenHasWhitespace: refreshToken !== refreshToken.trim(),
   };
 
   // 如果配置了 OAuth2 凭据，尝试验证是否可用
@@ -256,6 +268,17 @@ app.get('/api/debug/credentials', requireAuth, async (req, res) => {
     } catch (e) {
       result.driveAccessible = false;
       result.driveError = e.message;
+      // 如果是 invalid_client，给出具体提示
+      if (e.message.includes('invalid_client')) {
+        result.driveErrorHint = 'Client ID 或 Client Secret 不正确！请检查：\n' +
+          '1. 确认 Client ID 格式为 xxxxx.apps.googleusercontent.com\n' +
+          '2. 确认 Client Secret 格式为 GOCSPX-xxxxx\n' +
+          '3. 确认没有多余空格或引号\n' +
+          '4. 确认与授权时使用的是同一套凭据';
+      }
+      if (e.message.includes('invalid_grant')) {
+        result.driveErrorHint = 'Refresh Token 已失效！请重新运行 google-auth.js 获取新的 token';
+      }
     }
   } else {
     result.driveAccessible = false;
